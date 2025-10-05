@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Employees</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 24px; }
+        h1 { margin: 0 0 16px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border-bottom: 1px solid #eee; padding: 10px 8px; text-align: left; }
+        tr:hover { background: #fafafa; cursor: pointer; }
+        .topbar { display:flex; justify-content: space-between; align-items:center; margin-bottom: 12px; }
+        .logout a { text-decoration:none; color:#2d6cdf; }
+
+        /* Modal */
+        .modal-backdrop {
+          position: fixed; inset: 0; background: rgba(0,0,0,.35);
+          display: none; align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal {
+          background: #fff; width: 520px; max-width: 95vw; border-radius: 12px;
+          box-shadow: 0 12px 40px rgba(0,0,0,.2); padding: 20px;
+        }
+        .modal h2 { margin: 0 0 12px; }
+        .modal .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .modal label { display:block; font-size: 13px; margin-bottom: 4px; color:#333; }
+        .modal input { width:100%; padding:10px; border:1px solid #ddd; border-radius: 8px; }
+        .row-actions { display:flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+        .btn { padding:10px 14px; border:none; border-radius:8px; cursor:pointer; }
+        .btn.primary { background:#2d6cdf; color:#fff; }
+        .btn.ghost { background:#f2f4f8; }
+        .btn.danger { background:#cc2a2a; color:#fff; }
+        .close-x { float:right; cursor:pointer; font-size:20px; line-height: 20px; padding: 0 6px; }
+        .hint { font-size: 12px; color:#666; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+<div class="topbar">
+    <h1>Employees</h1>
+    <div class="logout"><a th:href="@{/logout}">Logout</a></div>
+</div>
+<p class="hint">Click a row to view full details, update, or delete.</p>
+
+<table>
+    <thead>
+    <tr>
+        <th>Name</th>
+        <th>Email</th>
+    </tr>
+    </thead>
+    <tbody>
+    <!-- Only name & email are visible in the list.
+         We store the rest as data-* attributes for the modal. -->
+    <tr th:each="e : ${employees}"
+        th:data-id="${e.id}"
+        th:data-name="${e.name}"
+        th:data-email="${e.email}"
+        th:data-phone="${e.phone}"
+        th:data-department="${e.department}"
+        onclick="openModal(this)">
+        <td th:text="${e.name}">Name</td>
+        <td th:text="${e.email}">email@example.com</td>
+    </tr>
+    </tbody>
+</table>
+
+<!-- Modal -->
+<div id="backdrop" class="modal-backdrop" onclick="backdropClick(event)">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" onclick="event.stopPropagation()">
+        <span class="close-x" onclick="closeModal()">×</span>
+        <h2 id="modalTitle">Employee Details</h2>
+        <form id="updateForm" th:action="@{/employees/__ID__/update}" method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <div class="grid">
+                <div>
+                    <label for="name">Name</label>
+                    <input id="name" name="name" type="text" required />
+                </div>
+                <div>
+                    <label for="email">Email</label>
+                    <input id="email" name="email" type="email" required />
+                </div>
+                <div>
+                    <label for="phone">Phone</label>
+                    <input id="phone" name="phone" type="text" />
+                </div>
+                <div>
+                    <label for="department">Department</label>
+                    <input id="department" name="department" type="text" />
+                </div>
+            </div>
+            <div class="row-actions">
+                <button class="btn ghost" type="button" onclick="closeModal()">Close</button>
+                <button class="btn danger" type="submit" form="deleteForm">Delete</button>
+                <button class="btn primary" type="submit">Update</button>
+            </div>
+        </form>
+
+        <!-- Separate delete form so it posts to /employees/{id}/delete with CSRF -->
+        <form id="deleteForm" th:action="@{/employees/__ID__/delete}" method="post" style="display:none;">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+        </form>
+    </div>
+</div>
+
+<script>
+    const backdrop = document.getElementById('backdrop');
+    const updateForm = document.getElementById('updateForm');
+    const deleteForm = document.getElementById('deleteForm');
+
+    function openModal(row) {
+      const id    = row.dataset.id;
+      const name  = row.dataset.name;
+      const email = row.dataset.email;
+      const phone = row.dataset.phone || '';
+      const dept  = row.dataset.department || '';
+
+      // Fill inputs
+      document.getElementById('name').value = name;
+      document.getElementById('email').value = email;
+      document.getElementById('phone').value = phone;
+      document.getElementById('department').value = dept;
+
+      // Update form actions to embed employee id
+      updateForm.setAttribute('action', updateForm.getAttribute('action').replace('__ID__', id));
+      deleteForm.setAttribute('action', deleteForm.getAttribute('action').replace('__ID__', id));
+
+      backdrop.style.display = 'flex';
+    }
+
+    function closeModal() {
+      backdrop.style.display = 'none';
+      // reset form actions back to template placeholders for next open
+      updateForm.setAttribute('action', updateForm.getAttribute('action').replace(/\\/employees\\/.+?\\/update$/, '/employees/__ID__/update'));
+      deleteForm.setAttribute('action', deleteForm.getAttribute('action').replace(/\\/employees\\/.+?\\/delete$/, '/employees/__ID__/delete'));
+    }
+
+    function backdropClick(e) {
+      if (e.target === backdrop) closeModal();
+    }
+
+    // Prevent accidental double-action replacement if user opens multiple times quickly
+    // (no-op if placeholder already present)
+    const safeReplace = (el, pat, repl) => el.getAttribute('action').includes(pat) && el.setAttribute('action', el.getAttribute('action').replace(pat, repl));
+</script>
+</body>
+</html>
